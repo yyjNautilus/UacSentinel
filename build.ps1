@@ -1,4 +1,4 @@
-# 重新编译 UacSentinel.exe
+﻿# 重新编译 UacSentinel.exe
 # 用法: powershell -ExecutionPolicy Bypass -File build.ps1
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot

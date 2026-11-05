@@ -1,4 +1,4 @@
-# 卸载提权哨兵（当前用户）
+﻿# 卸载提权哨兵（当前用户）
 $ErrorActionPreference = 'SilentlyContinue'
 
 Get-Process UacSentinel | Stop-Process -Force

@@ -1,4 +1,4 @@
-# 安装到本机（当前用户，无需管理员权限）
+﻿# 安装到本机（当前用户，无需管理员权限）
 $ErrorActionPreference = 'Stop'
 $src = Join-Path $PSScriptRoot 'dist\UacSentinel.exe'
 if (-not (Test-Path $src)) {
@@ -38,6 +38,6 @@ Write-Host "   程序位置: $targetDir"
 Write-Host "   开机自启: 已开启（可在悬浮窗右下角取消）"
 Write-Host "   数据记录: $targetDir\data\events.json"
 Write-Host ""
-Write-Host " 现在屏幕右下角应该出现一个小窗。"
+Write-Host " 它会在右下角托盘常驻;检测到你打开智能体时会自动浮出面板。"
 Write-Host " 想立刻看效果，可运行:  Start-Process cmd -Verb RunAs"
 Write-Host ""
