@@ -1,0 +1,5 @@
+﻿dist/data/
+*.wav
+*.log
+*.user
+.vs/
