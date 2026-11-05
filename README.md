@@ -57,6 +57,16 @@
 
 主面板标题栏也会顺带显示"X 个项目在跑"，不打开列表也能一眼看到。
 
+
+### 接入其他 AI 助手
+
+看板除了读 DSH 自己的会话，还会读 `%LOCALAPPDATA%\AgentStatus\*.json`。
+任何 AI 助手（豆包、千问、WorkBuddy 等）只要按约定写这个文件，就会出现在“项目状态”列表里；
+写不了文件也可以提供 `GET http://127.0.0.1:<port>/agent-status` 的本地接口。
+
+给它们的接入提示词（含 JSON 格式、验收标准、Python/Node 参考实现）：
+[docs/agent-status-prompt.md](docs/agent-status-prompt.md)
+
 ## 安装
 
 1. 双击 `Install.cmd`（装到当前用户目录，不需要管理员权限）。

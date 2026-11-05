@@ -39,23 +39,105 @@ namespace UacSentinel
             List<ProjectItem> list = new List<ProjectItem>();
             try
             {
-                if (!Directory.Exists(CacheDir)) return list;
-                foreach (string file in Directory.GetFiles(CacheDir, "*.json"))
+                if (Directory.Exists(CacheDir))
                 {
-                    try
+                    foreach (string file in Directory.GetFiles(CacheDir, "*.json"))
                     {
-                        ProjectItem item = Parse(file);
-                        if (item != null) list.Add(item);
+                        try
+                        {
+                            ProjectItem item = Parse(file);
+                            if (item != null) list.Add(item);
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
             }
             catch { }
+
+            list.AddRange(ScanExternal());
 
             return list
                 .OrderByDescending(x => x.Status == "running")
                 .ThenByDescending(x => x.LastActivity)
                 .ToList();
+        }
+
+        internal static string AgentStatusDir
+        {
+            get
+            {
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AgentStatus");
+            }
+        }
+
+        /// <summary>读取第三方 AI 助手按约定写出的状态文件（%LOCALAPPDATA%\AgentStatus\*.json）。</summary>
+        private static List<ProjectItem> ScanExternal()
+        {
+            List<ProjectItem> list = new List<ProjectItem>();
+            try
+            {
+                if (!Directory.Exists(AgentStatusDir)) return list;
+                foreach (string file in Directory.GetFiles(AgentStatusDir, "*.json"))
+                {
+                    try
+                    {
+                        Dictionary<string, object> root = Json.Deserialize<Dictionary<string, object>>(File.ReadAllText(file, Encoding.UTF8));
+                        if (root == null) continue;
+                        string agent = root.ContainsKey("agent") ? Convert.ToString(root["agent"]) : Path.GetFileNameWithoutExtension(file);
+                        if (string.IsNullOrEmpty(agent)) agent = "外部助手";
+
+                        System.Collections.IEnumerable seq = null;
+                        if (root.ContainsKey("projects")) seq = root["projects"] as System.Collections.IEnumerable;
+                        if (seq == null) continue;
+
+                        foreach (object o in seq)
+                        {
+                            Dictionary<string, object> p = AsDict(o);
+                            if (p == null) continue;
+                            string title = p.ContainsKey("title") ? Convert.ToString(p["title"]) : "未命名";
+                            string status = p.ContainsKey("status") ? Normalize(Convert.ToString(p["status"])) : "idle";
+                            string cwd = p.ContainsKey("cwd") ? Convert.ToString(p["cwd"]) : null;
+
+                            ProjectItem item = new ProjectItem();
+                            item.Title = agent + " · " + title;
+                            item.Cwd = cwd;
+                            item.Status = status;
+                            item.Turns = p.ContainsKey("turns") ? SafeInt(p["turns"]) : 0;
+                            item.LastActivity = p.ContainsKey("updatedAt") ? SafeDate(p["updatedAt"]) : File.GetLastWriteTime(file);
+                            list.Add(item);
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        private static string Normalize(string status)
+        {
+            string s = (status ?? string.Empty).Trim().ToLowerInvariant();
+            if (s == "running" || s == "working" || s == "busy") return "running";
+            if (s == "done" || s == "completed" || s == "success" || s == "finished") return "done";
+            if (s == "error" || s == "failed" || s == "aborted") return "interrupted";
+            return "idle";
+        }
+
+        private static int SafeInt(object o)
+        {
+            try { return Convert.ToInt32(o); }
+            catch { return 0; }
+        }
+
+        private static DateTime SafeDate(object o)
+        {
+            try
+            {
+                DateTime dt;
+                if (DateTime.TryParse(Convert.ToString(o), out dt)) return dt;
+            }
+            catch { }
+            return DateTime.Now;
         }
 
         private static ProjectItem Parse(string file)

@@ -1071,6 +1071,8 @@ namespace UacSentinel
         private readonly System.Windows.Forms.Timer _flash;
         private readonly System.Windows.Forms.Timer _hideAlert;
         private readonly System.Windows.Forms.Timer _agentTimer;
+        private readonly System.Windows.Forms.Timer _pulseTimer;
+        private double _pulsePhase;
         private bool _agentsRunning;
         private DateTime _agentsGoneAt = DateTime.MinValue;
         private bool _manualHide;
@@ -1127,6 +1129,11 @@ namespace UacSentinel
             _agentTimer.Interval = 3000;
             _agentTimer.Tick += new EventHandler(AgentTick);
             _agentTimer.Start();
+
+            _pulseTimer = new System.Windows.Forms.Timer();
+            _pulseTimer.Interval = 40;
+            _pulseTimer.Tick += new EventHandler(PulseTick);
+            _pulseTimer.Start();
 
             _monitor = new ElevationMonitor();
             _monitor.UseModel = _cfg.UseModel;
@@ -1633,6 +1640,24 @@ namespace UacSentinel
             ApplyLayout();
         }
 
+        private void PulseTick(object sender, EventArgs e)
+        {
+            if (!Visible) return;
+            _pulsePhase += 0.16;
+            if (_pulsePhase > Math.PI * 2) _pulsePhase -= Math.PI * 2;
+            Invalidate(new Rectangle(0, 0, Sc(58), Sc(50)));
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            if (_pulseTimer != null)
+            {
+                if (Visible) _pulseTimer.Start();
+                else _pulseTimer.Stop();
+            }
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -1660,10 +1685,13 @@ namespace UacSentinel
             Color dot = pending ? Theme.Red : Theme.Green;
             int cx = Sc(21);
             int cy = Sc(24);
-            int r = Sc(4);
-            using (SolidBrush glow = new SolidBrush(Color.FromArgb(pending ? 60 : 40, dot)))
+            int r = Math.Max(3, Sc(4));
+            double wave = (Math.Sin(_pulsePhase) + 1.0) / 2.0;
+            int glowR = (int)Math.Round(r * (1.4 + 2.2 * wave));
+            int alpha = (int)(16 + 58 * wave);
+            using (SolidBrush glow = new SolidBrush(Color.FromArgb(alpha, dot)))
             {
-                g.FillEllipse(glow, cx - r * 2, cy - r * 2, r * 4, r * 4);
+                g.FillEllipse(glow, cx - glowR, cy - glowR, glowR * 2, glowR * 2);
             }
             using (SolidBrush b = new SolidBrush(dot))
             {
