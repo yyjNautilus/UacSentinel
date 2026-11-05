@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
@@ -70,48 +71,93 @@ namespace UacSentinel
             }
         }
 
-        /// <summary>读取第三方 AI 助手按约定写出的状态文件（%LOCALAPPDATA%\AgentStatus\*.json）。</summary>
+        /// <summary>读取第三方 AI 助手的状态：%LOCALAPPDATA%\AgentStatus\*.json，或 *.port 指向的本地 HTTP 接口。</summary>
         private static List<ProjectItem> ScanExternal()
         {
             List<ProjectItem> list = new List<ProjectItem>();
             try
             {
                 if (!Directory.Exists(AgentStatusDir)) return list;
+
                 foreach (string file in Directory.GetFiles(AgentStatusDir, "*.json"))
                 {
                     try
                     {
-                        Dictionary<string, object> root = Json.Deserialize<Dictionary<string, object>>(File.ReadAllText(file, Encoding.UTF8));
-                        if (root == null) continue;
-                        string agent = root.ContainsKey("agent") ? Convert.ToString(root["agent"]) : Path.GetFileNameWithoutExtension(file);
-                        if (string.IsNullOrEmpty(agent)) agent = "外部助手";
+                        string body = File.ReadAllText(file, Encoding.UTF8);
+                        list.AddRange(ParseExternal(body, Path.GetFileNameWithoutExtension(file), File.GetLastWriteTime(file)));
+                    }
+                    catch { }
+                }
 
-                        System.Collections.IEnumerable seq = null;
-                        if (root.ContainsKey("projects")) seq = root["projects"] as System.Collections.IEnumerable;
-                        if (seq == null) continue;
-
-                        foreach (object o in seq)
-                        {
-                            Dictionary<string, object> p = AsDict(o);
-                            if (p == null) continue;
-                            string title = p.ContainsKey("title") ? Convert.ToString(p["title"]) : "未命名";
-                            string status = p.ContainsKey("status") ? Normalize(Convert.ToString(p["status"])) : "idle";
-                            string cwd = p.ContainsKey("cwd") ? Convert.ToString(p["cwd"]) : null;
-
-                            ProjectItem item = new ProjectItem();
-                            item.Title = agent + " · " + title;
-                            item.Cwd = cwd;
-                            item.Status = status;
-                            item.Turns = p.ContainsKey("turns") ? SafeInt(p["turns"]) : 0;
-                            item.LastActivity = p.ContainsKey("updatedAt") ? SafeDate(p["updatedAt"]) : File.GetLastWriteTime(file);
-                            list.Add(item);
-                        }
+                foreach (string portFile in Directory.GetFiles(AgentStatusDir, "*.port"))
+                {
+                    try
+                    {
+                        string portText = File.ReadAllText(portFile, Encoding.UTF8).Trim();
+                        int port;
+                        if (!int.TryParse(portText, out port)) continue;
+                        string body = HttpGet("http://127.0.0.1:" + port + "/agent-status");
+                        if (string.IsNullOrEmpty(body)) continue;
+                        list.AddRange(ParseExternal(body, Path.GetFileNameWithoutExtension(portFile), File.GetLastWriteTime(portFile)));
                     }
                     catch { }
                 }
             }
             catch { }
             return list;
+        }
+
+        private static List<ProjectItem> ParseExternal(string json, string fallbackAgent, DateTime fallbackTime)
+        {
+            List<ProjectItem> list = new List<ProjectItem>();
+            Dictionary<string, object> root = null;
+            try { root = Json.Deserialize<Dictionary<string, object>>(json); }
+            catch { return list; }
+            if (root == null) return list;
+
+            string agent = root.ContainsKey("agent") ? Convert.ToString(root["agent"]) : fallbackAgent;
+            if (string.IsNullOrEmpty(agent)) agent = "外部助手";
+
+            System.Collections.IEnumerable seq = null;
+            if (root.ContainsKey("projects")) seq = root["projects"] as System.Collections.IEnumerable;
+            if (seq == null) return list;
+
+            foreach (object o in seq)
+            {
+                Dictionary<string, object> p = AsDict(o);
+                if (p == null) continue;
+                string title = p.ContainsKey("title") ? Convert.ToString(p["title"]) : "未命名";
+                string status = p.ContainsKey("status") ? Normalize(Convert.ToString(p["status"])) : "idle";
+                string cwd = p.ContainsKey("cwd") ? Convert.ToString(p["cwd"]) : null;
+
+                ProjectItem item = new ProjectItem();
+                item.Title = agent + " \u00B7 " + title;
+                item.Cwd = cwd;
+                item.Status = status;
+                item.Turns = p.ContainsKey("turns") ? SafeInt(p["turns"]) : 0;
+                item.LastActivity = p.ContainsKey("updatedAt") ? SafeDate(p["updatedAt"]) : fallbackTime;
+                list.Add(item);
+            }
+            return list;
+        }
+
+        private static string HttpGet(string url)
+        {
+            try
+            {
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
+                req.Method = "GET";
+                req.Timeout = 1500;
+                req.ReadWriteTimeout = 1500;
+                req.Proxy = null;
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                using (Stream s = resp.GetResponseStream())
+                using (StreamReader sr = new StreamReader(s, Encoding.UTF8))
+                {
+                    return sr.ReadToEnd();
+                }
+            }
+            catch { return null; }
         }
 
         private static string Normalize(string status)
