@@ -1095,6 +1095,9 @@ namespace UacSentinel
         private Rectangle _bannerRect;
         private Rectangle _ackRect;
         private Rectangle _listRect;
+        private Rectangle _projRect;
+        private int _runningProjects;
+        private int _projTick;
 
         internal MainForm()
         {
@@ -1215,6 +1218,7 @@ namespace UacSentinel
             _closeRect = new Rectangle(Width - Sc(36), Sc(10), Sc(24), Sc(24));
             _minRect = new Rectangle(Width - Sc(64), Sc(10), Sc(24), Sc(24));
             _histRect = new Rectangle(Sc(12), Height - Sc(38), Sc(120), Sc(26));
+            _projRect = new Rectangle(Sc(136), Height - Sc(38), Sc(58), Sc(26));
             _autoRect = new Rectangle(Width - Sc(100), Height - Sc(36), Sc(88), Sc(22));
             _bannerRect = ShowBanner ? new Rectangle(Sc(12), Sc(56), Width - Sc(24), Sc(66)) : Rectangle.Empty;
             _ackRect = ShowBanner ? new Rectangle(Width - Sc(88), Sc(64), Sc(64), Sc(24)) : Rectangle.Empty;
@@ -1297,6 +1301,21 @@ namespace UacSentinel
 
         private void AgentTick(object sender, EventArgs e)
         {
+            _projTick++;
+            if (_projTick % 4 == 1)
+            {
+                int n = 0;
+                foreach (ProjectItem it in ProjectScanner.Scan())
+                {
+                    if (it.Status == "running") n++;
+                }
+                if (n != _runningProjects)
+                {
+                    _runningProjects = n;
+                    Invalidate();
+                }
+            }
+
             if (!_cfg.FollowAgents) return;
             bool running = AgentWatch.AnyRunning();
             if (running)
@@ -1519,6 +1538,10 @@ namespace UacSentinel
             preview.Click += delegate { PreviewAlert(); };
             menu.Items.Add(preview);
 
+            ToolStripMenuItem projects = new ToolStripMenuItem("项目状态");
+            projects.Click += delegate { ShowProjects(); };
+            menu.Items.Add(projects);
+
             ToolStripMenuItem sound = new ToolStripMenuItem("提醒声音");
             sound.CheckOnClick = true;
             sound.Checked = _cfg.Sound;
@@ -1577,6 +1600,19 @@ namespace UacSentinel
             Show();
             BringToFront();
             Activate();
+        }
+
+        private ProjectsForm _projectsForm;
+
+        private void ShowProjects()
+        {
+            if (_projectsForm != null && !_projectsForm.IsDisposed)
+            {
+                _projectsForm.Activate();
+                return;
+            }
+            _projectsForm = new ProjectsForm();
+            _projectsForm.Show();
         }
 
         private void PreviewAlert()
@@ -1648,7 +1684,8 @@ namespace UacSentinel
             }
             string sub = pending
                 ? "有提权请求正在等待处理"
-                : "监控中 \u00B7 今日 " + today + " 次" + (silentToday > 0 ? "（静默 " + silentToday + "）" : "");
+                : "监控中 \u00B7 今日 " + today + " 次" + (silentToday > 0 ? "（静默 " + silentToday + "）" : "")
+                  + (_runningProjects > 0 ? " \u00B7 " + _runningProjects + " 个项目在跑" : "");
             Gfx.Text(g, sub, Theme.Small, pending ? Theme.Red : Theme.Sub, Sc(34), Sc(34));
 
             PaintGlyphButton(g, _minRect, false, _hoverMin);
@@ -1857,6 +1894,9 @@ namespace UacSentinel
             Color moreColor = _hoverHistory ? Theme.Text : Theme.Blue;
             Gfx.Text(g, more, Theme.Small, moreColor, _histRect.X, _histRect.Y + Sc(4));
 
+            string proj = _runningProjects > 0 ? "项目 " + _runningProjects : "项目";
+            Gfx.Text(g, proj, Theme.Small, _runningProjects > 0 ? Theme.Green : Theme.Blue, _projRect.X, _projRect.Y + Sc(4));
+
             int box = Sc(13);
             Rectangle boxRect = new Rectangle(_autoRect.X, _autoRect.Y + Sc(4), box, box);
             bool on = Autostart.IsEnabled();
@@ -1934,6 +1974,11 @@ namespace UacSentinel
                 {
                     form.ShowDialog(this);
                 }
+                return;
+            }
+            if (_projRect.Contains(e.Location))
+            {
+                ShowProjects();
                 return;
             }
             if (_autoRect.Contains(e.Location))
