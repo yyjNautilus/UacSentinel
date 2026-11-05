@@ -63,9 +63,12 @@
 看板除了读 DSH 自己的会话，还会读 `%LOCALAPPDATA%\AgentStatus\*.json`。
 任何 AI 助手（豆包、千问、WorkBuddy 等）只要按约定写这个文件，就会出现在“项目状态”列表里；
 写不了文件也可以提供 `GET http://127.0.0.1:<port>/agent-status` 的本地接口。
-
 给它们的接入提示词（含 JSON 格式、验收标准、Python/Node 参考实现）：
 [docs/agent-status-prompt.md](docs/agent-status-prompt.md)
+
+仓库自带一份零依赖、自测通过的助手侧 Python 上报模块，可直接照用：
+`agent-status/agent_status.py`（自测：`agent-status/selftest_agent_status.py`；
+可选守护进程 `agent-status/agent_status_watchdog.py`，用于强制结束助手后自动标「已中断」）。
 
 ## 安装
 

@@ -302,7 +302,19 @@ namespace UacSentinel
         private readonly System.Windows.Forms.Timer _timer;
         private readonly Label _header;
         private readonly ListView _list;
+        private readonly Button _close;
         private float _s = 1f;
+
+        private const int WM_NCHITTEST = 0x0084;
+        private const int HTCLIENT = 1;
+        private const int HTLEFT = 10;
+        private const int HTRIGHT = 11;
+        private const int HTTOP = 12;
+        private const int HTTOPLEFT = 13;
+        private const int HTTOPRIGHT = 14;
+        private const int HTBOTTOM = 15;
+        private const int HTBOTTOMLEFT = 16;
+        private const int HTBOTTOMRIGHT = 17;
 
         internal ProjectsForm()
         {
@@ -315,7 +327,12 @@ namespace UacSentinel
             {
                 _s = g.DpiX / 96f;
             }
-            Size = new Size(Sc(640), Sc(440));
+            Rectangle wa = Screen.PrimaryScreen != null
+                ? Screen.PrimaryScreen.WorkingArea
+                : new Rectangle(0, 0, Sc(1280), Sc(800));
+            Size = new Size(Math.Max(Sc(560), Math.Min(Sc(940), wa.Width - Sc(48))),
+                            Math.Max(Sc(360), Math.Min(Sc(640), wa.Height - Sc(48))));
+            MinimumSize = new Size(Sc(560), Sc(360));
 
             _header = new Label();
             _header.Font = Theme.Title;
@@ -334,6 +351,7 @@ namespace UacSentinel
             close.Font = Theme.Small;
             close.SetBounds(Width - Sc(80), Sc(10), Sc(62), Sc(26));
             close.Click += delegate { Close(); };
+            _close = close;
             Controls.Add(close);
 
             _list = new ListView();
@@ -383,6 +401,9 @@ namespace UacSentinel
             };
             Controls.Add(_list);
 
+            LayoutChildren();
+            LayoutColumns();
+
             _timer = new System.Windows.Forms.Timer();
             _timer.Interval = 5000;
             _timer.Tick += delegate { Reload(); };
@@ -395,13 +416,81 @@ namespace UacSentinel
             return (int)Math.Round(v * _s);
         }
 
-        protected override void OnHandleCreated(EventArgs e)
+        private void ApplyRoundRegion()
         {
-            base.OnHandleCreated(e);
+            if (Width <= 0 || Height <= 0) return;
             using (GraphicsPath path = Draw.Round(new Rectangle(0, 0, Width, Height), Sc(12)))
             {
                 Region = new Region(path);
             }
+        }
+
+        /// <summary>按当前窗口尺寸重新摆放标题、关闭按钮和列表。</summary>
+        private void LayoutChildren()
+        {
+            if (_header == null || _list == null || _close == null) return;
+            _header.SetBounds(Sc(18), Sc(12), Math.Max(Sc(120), Width - Sc(112)), Sc(24));
+            _close.SetBounds(Width - Sc(80), Sc(10), Sc(62), Sc(26));
+            _list.SetBounds(Sc(14), Sc(48), Math.Max(Sc(100), Width - Sc(28)), Math.Max(Sc(60), Height - Sc(64)));
+        }
+
+        /// <summary>按当前列表宽度重分列宽：状态/轮次/最后活动固定，项目、会话与工作目录自适应。</summary>
+        private void LayoutColumns()
+        {
+            if (_list == null || _list.Columns.Count < 5) return;
+            int fixedW = Sc(66) + Sc(56) + Sc(86);
+            int available = Math.Max(Sc(300), Width - Sc(28) - Sc(2));
+            int rest = Math.Max(Sc(160), available - fixedW);
+            int projW = (int)Math.Round(rest * 0.52);
+            int cwdW = rest - projW;
+            _list.Columns[0].Width = Sc(66);
+            _list.Columns[1].Width = projW;
+            _list.Columns[2].Width = Sc(56);
+            _list.Columns[3].Width = Sc(86);
+            _list.Columns[4].Width = cwdW;
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            ApplyRoundRegion();
+            LayoutChildren();
+            LayoutColumns();
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_NCHITTEST)
+            {
+                base.WndProc(ref m);
+                if ((int)m.Result == HTCLIENT)
+                {
+                    int lp = m.LParam.ToInt32();
+                    Point sp = new Point((short)(lp & 0xFFFF), (short)((lp >> 16) & 0xFFFF));
+                    Point cp = PointToClient(sp);
+                    int grip = Sc(7);
+                    bool left = cp.X <= grip;
+                    bool right = cp.X >= ClientSize.Width - grip;
+                    bool top = cp.Y <= grip;
+                    bool bottom = cp.Y >= ClientSize.Height - grip;
+                    if (top && left) m.Result = (IntPtr)HTTOPLEFT;
+                    else if (top && right) m.Result = (IntPtr)HTTOPRIGHT;
+                    else if (bottom && left) m.Result = (IntPtr)HTBOTTOMLEFT;
+                    else if (bottom && right) m.Result = (IntPtr)HTBOTTOMRIGHT;
+                    else if (left) m.Result = (IntPtr)HTLEFT;
+                    else if (right) m.Result = (IntPtr)HTRIGHT;
+                    else if (top) m.Result = (IntPtr)HTTOP;
+                    else if (bottom) m.Result = (IntPtr)HTBOTTOM;
+                }
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            ApplyRoundRegion();
         }
 
         private void Reload()
@@ -437,6 +526,18 @@ namespace UacSentinel
             using (Pen p = new Pen(Theme.Border))
             {
                 g.DrawPath(p, path);
+            }
+
+            // 右下角缩放提示（可拖此处缩放窗口）
+            using (Pen gp = new Pen(Theme.Border))
+            {
+                int bx = Width - Sc(6);
+                int by = Height - Sc(6);
+                for (int i = 1; i <= 3; i++)
+                {
+                    int off = i * Sc(5);
+                    g.DrawLine(gp, bx - off, by, bx, by - off);
+                }
             }
         }
 

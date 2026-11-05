@@ -77,7 +77,27 @@
 
 ---
 
-## 参考实现（Python，可直接照抄）
+## 参考实现（Python，直接用仓库里的模块）
+
+仓库已附带一份完整、自测通过的零依赖 Python 上报模块，字段与看板契约严格对齐：
+
+- 模块：`agent-status/agent_status.py`
+- 自测：`agent-status/selftest_agent_status.py`（`python agent-status/selftest_agent_status.py`）
+- 可选守护进程（强制结束助手 → 自动变「已中断」）：`agent-status/agent_status_watchdog.py`
+
+用法：
+
+```python
+from agent_status import AgentStatus
+st = AgentStatus()                                  # id 默认 doubao
+st.begin("task-20261105-001", "整理《标识符命名法则》笔记", note="开始")
+st.update("task-20261105-001", note="第 2 节完成")   # 每轮结束调一次
+st.done("task-20261105-001", note="完成")
+st.interrupt("task-20261105-001", note="报错")
+```
+
+也支持命令行一步一进程：`begin / update / done / interrupt / idle / reconcile / serve / show`，
+见 `agent_status.py` 头部注释。若只想看最小可抄的核心，等价于：
 
 ```python
 import json, os, tempfile, datetime
