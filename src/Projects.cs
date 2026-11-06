@@ -378,27 +378,34 @@ namespace UacSentinel
                     new Rectangle(e.Bounds.X + Sc(8), e.Bounds.Y, e.Bounds.Width, e.Bounds.Height), Theme.Sub,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
             };
+            // 背景与所有列文字集中在 DrawItem 一次画完：悬停/局部重绘时只要重绘该行就一定连文字一起画，
+            // 不会再出现“只刷背景把字盖掉”的情况（DrawSubItem 置空）。
             _list.DrawItem += delegate(object s, DrawListViewItemEventArgs e)
             {
                 Color bg = e.Item.Selected ? Theme.CardHover : Theme.Bg;
                 using (SolidBrush b = new SolidBrush(bg)) e.Graphics.FillRectangle(b, e.Bounds);
-            };
-            _list.DrawSubItem += delegate(object s, DrawListViewSubItemEventArgs e)
-            {
-                Color color = Theme.Text;
-                if (e.ColumnIndex == 0)
+
+                ProjectItem it = e.Item.Tag as ProjectItem;
+                for (int i = 0; i < e.Item.SubItems.Count; i++)
                 {
-                    ProjectItem it = e.Item.Tag as ProjectItem;
-                    if (it != null)
+                    ListViewItem.ListViewSubItem sub = e.Item.SubItems[i];
+                    Rectangle cell = sub.Bounds;
+                    if (cell.Width <= 0) continue;
+                    Color color = Theme.Text;
+                    if (i == 0 && it != null)
                     {
                         if (it.Status == "running") color = Theme.Green;
                         else if (it.Status == "interrupted") color = Theme.Red;
                         else color = Theme.Sub;
                     }
+                    TextRenderer.DrawText(e.Graphics, sub.Text, Theme.Small,
+                        new Rectangle(cell.X + Sc(8), cell.Y, Math.Max(0, cell.Width - Sc(10)), cell.Height), color,
+                        TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
                 }
-                TextRenderer.DrawText(e.Graphics, e.SubItem.Text, Theme.Small,
-                    new Rectangle(e.Bounds.X + Sc(8), e.Bounds.Y, e.Bounds.Width - Sc(10), e.Bounds.Height), color,
-                    TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+            };
+            _list.DrawSubItem += delegate(object s, DrawListViewSubItemEventArgs e)
+            {
+                e.DrawDefault = false;
             };
             Controls.Add(_list);
 
