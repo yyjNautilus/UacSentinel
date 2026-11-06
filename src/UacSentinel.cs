@@ -1620,6 +1620,8 @@ namespace UacSentinel
             }
             _projectsForm = new ProjectsForm();
             _projectsForm.Show();
+            _projectsForm.BringToFront();
+            _projectsForm.Activate();
         }
 
         private void PreviewAlert()

@@ -323,6 +323,7 @@ namespace UacSentinel
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Theme.Bg;
             DoubleBuffered = true;
+            AutoScaleMode = AutoScaleMode.None;
             using (Graphics g = CreateGraphics())
             {
                 _s = g.DpiX / 96f;
@@ -330,9 +331,9 @@ namespace UacSentinel
             Rectangle wa = Screen.PrimaryScreen != null
                 ? Screen.PrimaryScreen.WorkingArea
                 : new Rectangle(0, 0, Sc(1280), Sc(800));
-            Size = new Size(Math.Max(Sc(560), Math.Min(Sc(940), wa.Width - Sc(48))),
-                            Math.Max(Sc(360), Math.Min(Sc(640), wa.Height - Sc(48))));
-            MinimumSize = new Size(Sc(560), Sc(360));
+            Size = new Size(Math.Max(Sc(640), Math.Min(Sc(980), wa.Width - Sc(48))),
+                            Math.Max(Sc(400), Math.Min(Sc(700), wa.Height - Sc(48))));
+            MinimumSize = new Size(Sc(620), Sc(400));
 
             _header = new Label();
             _header.Font = Theme.Title;
@@ -429,18 +430,23 @@ namespace UacSentinel
         private void LayoutChildren()
         {
             if (_header == null || _list == null || _close == null) return;
-            _header.SetBounds(Sc(18), Sc(12), Math.Max(Sc(120), Width - Sc(112)), Sc(24));
-            _close.SetBounds(Width - Sc(80), Sc(10), Sc(62), Sc(26));
-            _list.SetBounds(Sc(14), Sc(48), Math.Max(Sc(100), Width - Sc(28)), Math.Max(Sc(60), Height - Sc(64)));
+            int cw = ClientSize.Width > 0 ? ClientSize.Width : Width;
+            int ch = ClientSize.Height > 0 ? ClientSize.Height : Height;
+            _header.SetBounds(Sc(18), Sc(12), Math.Max(Sc(120), cw - Sc(112)), Sc(24));
+            _close.SetBounds(cw - Sc(80), Sc(10), Sc(62), Sc(26));
+            _list.SetBounds(Sc(14), Sc(48), Math.Max(Sc(120), cw - Sc(28)), Math.Max(Sc(80), ch - Sc(64)));
         }
 
-        /// <summary>按当前列表宽度重分列宽：状态/轮次/最后活动固定，项目、会话与工作目录自适应。</summary>
+        /// <summary>按列表真实客户区宽度重分列宽，保证 5 列都在窗口内，项目/会话与工作目录自适应。</summary>
         private void LayoutColumns()
         {
             if (_list == null || _list.Columns.Count < 5) return;
+            int avail = _list.ClientSize.Width;
+            if (avail <= 0) avail = Math.Max(Sc(320), (ClientSize.Width > 0 ? ClientSize.Width : Width) - Sc(30));
+            avail -= Sc(18); // 预留滚动条，避免最后一列被挡
             int fixedW = Sc(66) + Sc(56) + Sc(86);
-            int available = Math.Max(Sc(300), Width - Sc(28) - Sc(2));
-            int rest = Math.Max(Sc(160), available - fixedW);
+            int rest = avail - fixedW;
+            if (rest < Sc(240)) rest = Math.Max(Sc(200), avail - Sc(140));
             int projW = (int)Math.Round(rest * 0.52);
             int cwdW = rest - projW;
             _list.Columns[0].Width = Sc(66);
@@ -491,6 +497,8 @@ namespace UacSentinel
         {
             base.OnHandleCreated(e);
             ApplyRoundRegion();
+            LayoutChildren();
+            LayoutColumns();
         }
 
         private void Reload()
